@@ -4,5 +4,7 @@ pub mod core;
 pub mod error;
 pub mod events;
 pub mod idempotency;
+pub mod models;
 pub mod netting;
 pub mod persistence;
+pub mod repositories;

@@ -68,12 +68,42 @@ src/
 ├── core/           # Engine, ledger, batch types
 ├── events/         # Kafka producers and consumers
 ├── idempotency/    # Deduplication logic
+├── models/         # Domain models (Account, Transaction, LedgerEntry, etc.)
 ├── netting/        # Netting algorithms
-├── persistence/    # Repositories and queries
+├── persistence/    # Legacy persistence module
+├── repositories/   # Data access layer (AccountRepository, BalanceRepository, etc.)
 ├── config.rs       # Configuration structs
 ├── error.rs        # Centralized error handling
+├── lib.rs          # Library crate exports
 └── main.rs         # Application entry point
+
+tests/
+├── common/         # Test utilities and setup
+└── repository_tests.rs  # Integration tests for repositories
 ```
+
+## Domain Models
+
+The settlement engine implements the following core domain models:
+
+- **Account**: Financial accounts with types (Asset, Liability, Revenue, Expense) and status management
+- **AccountBalance**: Balance tracking with optimistic locking for concurrent updates
+- **TransactionRecord**: Financial transactions with type (Payment, Refund, Chargeback, Transfer, Fee) and status lifecycle
+- **LedgerEntry**: Double-entry bookkeeping entries (Debit/Credit) with balance tracking
+- **SettlementBatch**: Batch processing with lifecycle management (Pending, Processing, Completed, Failed)
+- **NettingPosition**: Participant positions for bilateral/multilateral netting
+- **Currency**: ISO 4217 currency code support
+
+## Repository Layer
+
+Each domain model has a corresponding repository for database operations:
+
+- **AccountRepository**: CRUD operations, status updates, filtering by type/status
+- **BalanceRepository**: Atomic balance updates, optimistic locking, credit/debit/reserve operations
+- **TransactionRepository**: Transaction lifecycle, idempotency key lookup, batch assignment
+- **LedgerRepository**: Entry creation, balance verification, account history queries
+- **BatchRepository**: Batch lifecycle management, totals tracking, ready-for-processing queries
+- **NettingRepository**: Position storage, net receiver/payer queries, batch summaries
 
 ## Development
 
