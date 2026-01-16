@@ -1,0 +1,14 @@
+[application]
+port = 3000
+log_level = "info"
+
+[database]
+url = "postgres://postgres:postgres@localhost:5432/settlement_engine"
+pool_size = 5
+
+[redis]
+url = "redis://localhost:6379"
+
+[kafka]
+brokers = "localhost:9092"
+topic_prefix = "settlement"
