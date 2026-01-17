@@ -105,6 +105,14 @@ Each domain model has a corresponding repository for database operations:
 - **BatchRepository**: Batch lifecycle management, totals tracking, ready-for-processing queries
 - **NettingRepository**: Position storage, net receiver/payer queries, batch summaries
 
+## Service Layer
+
+Business logic services that orchestrate repository operations:
+
+- **AccountService**: Account creation with validation, status management (freeze/activate/close), metadata updates
+- **BalanceService**: Real-time balance queries, credit/debit operations, reservations, balance snapshots
+- **DoubleEntryEngine**: Core double-entry bookkeeping engine with atomic transactions, balance verification, and reversal support
+
 ## Development
 
 - **Linting**: `cargo clippy`

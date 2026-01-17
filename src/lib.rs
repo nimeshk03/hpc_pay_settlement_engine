@@ -8,3 +8,4 @@ pub mod models;
 pub mod netting;
 pub mod persistence;
 pub mod repositories;
+pub mod services;
