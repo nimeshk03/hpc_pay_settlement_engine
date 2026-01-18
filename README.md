@@ -135,6 +135,18 @@ Comprehensive ledger service for transaction processing:
 - **Atomic Operations**: SERIALIZABLE isolation level for concurrent transaction safety
 - **Balance Tracking**: Automatic balance_after calculation for audit trail
 
+## Batch Settlement System
+
+Complete batch settlement infrastructure for grouping and processing transactions:
+
+- **BatchService**: Main service for batch creation, management, and processing
+- **BatchStateMachine**: State machine for batch lifecycle (Pending -> Processing -> Completed/Failed)
+- **SettlementWindowConfig**: Configurable settlement windows (real-time, micro-batch, hourly, daily)
+- **BatchScheduler**: Background scheduler for automatic batch processing at cut-off times
+- **Transaction Assignment**: Assign settled transactions to batches with automatic totals calculation
+- **Batch Processing Pipeline**: Process batches with partial failure handling and completion notifications
+- **Retry Support**: Failed batches can be retried after fixing issues
+
 ## Development
 
 - **Linting**: `cargo clippy`
