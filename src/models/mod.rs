@@ -10,6 +10,6 @@ pub use account::{Account, AccountStatus, AccountType};
 pub use account_balance::AccountBalance;
 pub use currency::Currency;
 pub use ledger_entry::{EntryType, LedgerEntry};
-pub use netting_position::NettingPosition;
+pub use netting_position::{NettingPosition, NettingSummary};
 pub use settlement_batch::{BatchStatus, SettlementBatch};
 pub use transaction::{TransactionRecord, TransactionStatus, TransactionType};

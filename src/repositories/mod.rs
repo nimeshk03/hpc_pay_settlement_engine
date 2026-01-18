@@ -9,7 +9,7 @@ pub use account_repository::AccountRepository;
 pub use balance_repository::BalanceRepository;
 pub use batch_repository::BatchRepository;
 pub use ledger_repository::LedgerRepository;
-pub use netting_repository::NettingRepository;
+pub use netting_repository::{BatchNettingSummary, NettingRepository};
 pub use transaction_repository::TransactionRepository;
 
 use sqlx::PgPool;

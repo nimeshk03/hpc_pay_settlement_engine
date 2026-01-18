@@ -147,6 +147,25 @@ Complete batch settlement infrastructure for grouping and processing transaction
 - **Batch Processing Pipeline**: Process batches with partial failure handling and completion notifications
 - **Retry Support**: Failed batches can be retried after fixing issues
 
+## Netting Engine
+
+High-performance netting engine for reducing settlement volumes:
+
+- **Bilateral Netting**: Calculate net positions between pairs of participants
+  - Gross receivable/payable tracking per pair
+  - Net amount and direction calculation
+  - Settlement instruction generation
+- **Multilateral Netting**: Calculate net positions across all participants
+  - Aggregate positions from all transactions
+  - Optimize for minimum settlement movements
+  - Handle circular dependencies (100% netting efficiency)
+- **Netting Reports**: Comprehensive reports with metrics
+  - Gross volume, net volume, reduction amount
+  - Netting efficiency percentage (target: 85%+)
+  - Participant breakdown (net receivers, net payers, balanced)
+- **Position Persistence**: Store and retrieve netting positions from database
+- **Metrics Tracking**: Track batches processed, transactions netted, average efficiency
+
 ## Development
 
 - **Linting**: `cargo clippy`
