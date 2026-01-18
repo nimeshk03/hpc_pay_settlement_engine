@@ -124,6 +124,17 @@ Robust duplicate request handling with multi-layer storage:
 - **IdempotencyHandler**: Request processing with atomic check-and-process logic and metrics tracking
 - **IdempotencyCleanupJob**: Background job for expired record cleanup
 
+## Ledger Operations
+
+Comprehensive ledger service for transaction processing:
+
+- **LedgerService**: Main service for processing all transaction types with ACID compliance
+- **TransactionStateMachine**: State machine for valid transaction status transitions (Pending -> Settled/Failed, Settled -> Reversed)
+- **ValidationPipeline**: Multi-step validation including field validation, account verification, and sufficient funds checks
+- **Transaction Types**: Full support for Payment, Transfer, Fee, Refund, and Chargeback transactions
+- **Atomic Operations**: SERIALIZABLE isolation level for concurrent transaction safety
+- **Balance Tracking**: Automatic balance_after calculation for audit trail
+
 ## Development
 
 - **Linting**: `cargo clippy`
