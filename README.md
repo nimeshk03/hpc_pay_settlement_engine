@@ -113,6 +113,17 @@ Business logic services that orchestrate repository operations:
 - **BalanceService**: Real-time balance queries, credit/debit operations, reservations, balance snapshots
 - **DoubleEntryEngine**: Core double-entry bookkeeping engine with atomic transactions, balance verification, and reversal support
 
+## Idempotency System
+
+Robust duplicate request handling with multi-layer storage:
+
+- **IdempotencyKeyGenerator**: SHA-256 based key generation from transaction attributes with configurable time windows
+- **PostgresIdempotencyStore**: Persistent storage with unique constraints and automatic expiration
+- **RedisIdempotencyCache**: Fast lookup cache with TTL for high-performance duplicate detection
+- **HybridIdempotencyStore**: Combined PostgreSQL + Redis storage for reliability and speed
+- **IdempotencyHandler**: Request processing with atomic check-and-process logic and metrics tracking
+- **IdempotencyCleanupJob**: Background job for expired record cleanup
+
 ## Development
 
 - **Linting**: `cargo clippy`

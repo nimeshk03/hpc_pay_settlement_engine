@@ -24,6 +24,8 @@ config = "0.14"
 validator = { version = "0.16", features = ["derive"] }
 dotenvy = "0.15"
 reqwest = "0.11"
+sha2 = "0.10"
+hex = "0.4"
 
 [dev-dependencies]
 mockall = "0.12"
