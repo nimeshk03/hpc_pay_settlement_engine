@@ -282,6 +282,64 @@ impl TransactionRepository {
         Ok(row.0)
     }
 
+    /// Lists transactions with filters for API.
+    pub async fn list_with_filters(
+        &self,
+        account_id: Option<Uuid>,
+        status: Option<TransactionStatus>,
+        currency: Option<&str>,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<TransactionRecord>> {
+        let rows = sqlx::query_as::<_, TransactionRecord>(
+            r#"
+            SELECT id, external_id, type, status, source_account_id, destination_account_id, amount, currency, fee_amount, net_amount, settlement_batch_id, idempotency_key, metadata, created_at, settled_at
+            FROM transactions
+            WHERE ($1::uuid IS NULL OR source_account_id = $1 OR destination_account_id = $1)
+              AND ($2::transaction_status IS NULL OR status = $2)
+              AND ($3::text IS NULL OR currency = $3)
+            ORDER BY created_at DESC
+            LIMIT $4 OFFSET $5
+            "#,
+        )
+        .bind(account_id)
+        .bind(status)
+        .bind(currency)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(AppError::Database)?;
+
+        Ok(rows)
+    }
+
+    /// Counts transactions with filters for API pagination.
+    pub async fn count_with_filters(
+        &self,
+        account_id: Option<Uuid>,
+        status: Option<TransactionStatus>,
+        currency: Option<&str>,
+    ) -> Result<i64> {
+        let row: (i64,) = sqlx::query_as(
+            r#"
+            SELECT COUNT(*)
+            FROM transactions
+            WHERE ($1::uuid IS NULL OR source_account_id = $1 OR destination_account_id = $1)
+              AND ($2::transaction_status IS NULL OR status = $2)
+              AND ($3::text IS NULL OR currency = $3)
+            "#,
+        )
+        .bind(account_id)
+        .bind(status)
+        .bind(currency)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(AppError::Database)?;
+
+        Ok(row.0)
+    }
+
     /// Finds transactions within a time range.
     pub async fn find_by_time_range(
         &self,

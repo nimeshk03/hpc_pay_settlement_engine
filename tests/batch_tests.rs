@@ -154,8 +154,7 @@ async fn test_batch_service_assign_transaction() {
     let updated_batch = batch_service
         .get_batch(batch.id)
         .await
-        .expect("Failed to get batch")
-        .expect("Batch not found");
+        .expect("Failed to get batch");
 
     assert_eq!(updated_batch.total_transactions, 1);
     assert_eq!(updated_batch.gross_amount, dec!(100));
@@ -311,8 +310,7 @@ async fn test_batch_service_close_and_process() {
     let final_batch = batch_service
         .get_batch(batch.id)
         .await
-        .expect("Failed to get batch")
-        .expect("Batch not found");
+        .expect("Failed to get batch");
 
     assert_eq!(final_batch.status, BatchStatus::Completed);
     assert!(final_batch.completed_at.is_some());

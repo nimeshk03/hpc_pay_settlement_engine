@@ -136,6 +136,23 @@ impl LedgerRepository {
         Ok(rows)
     }
 
+    /// Counts entries for an account for pagination.
+    pub async fn count_by_account(&self, account_id: Uuid) -> Result<i64> {
+        let row: (i64,) = sqlx::query_as(
+            r#"
+            SELECT COUNT(*)
+            FROM ledger_entries
+            WHERE account_id = $1
+            "#,
+        )
+        .bind(account_id)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(AppError::Database)?;
+
+        Ok(row.0)
+    }
+
     /// Finds entries for an account within a date range.
     pub async fn find_by_account_and_date_range(
         &self,
@@ -185,23 +202,6 @@ impl LedgerRepository {
         .map_err(AppError::Database)?;
 
         Ok(row.0.unwrap_or(Decimal::ZERO))
-    }
-
-    /// Counts entries for an account.
-    pub async fn count_by_account(&self, account_id: Uuid) -> Result<i64> {
-        let row: (i64,) = sqlx::query_as(
-            r#"
-            SELECT COUNT(*)
-            FROM ledger_entries
-            WHERE account_id = $1
-            "#,
-        )
-        .bind(account_id)
-        .fetch_one(&self.pool)
-        .await
-        .map_err(AppError::Database)?;
-
-        Ok(row.0)
     }
 
     /// Gets the latest entry for an account (for balance verification).

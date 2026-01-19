@@ -772,6 +772,317 @@ impl LedgerService {
         self.ledger_repo.find_by_account(account_id, limit, 0).await
     }
 
+    /// Gets a transaction by ID.
+    pub async fn get_transaction(&self, id: Uuid) -> Result<TransactionRecord> {
+        self.transaction_repo
+            .find_by_id(id)
+            .await?
+            .ok_or_else(|| AppError::NotFound(format!("Transaction '{}' not found", id)))
+    }
+
+    /// Lists transactions with optional filters.
+    pub async fn list_transactions(
+        &self,
+        account_id: Option<Uuid>,
+        status: Option<TransactionStatus>,
+        currency: Option<&str>,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<TransactionRecord>> {
+        self.transaction_repo
+            .list_with_filters(account_id, status, currency, limit, offset)
+            .await
+    }
+
+    /// Counts transactions with optional filters for pagination.
+    pub async fn count_transactions(
+        &self,
+        account_id: Option<Uuid>,
+        status: Option<TransactionStatus>,
+        currency: Option<&str>,
+    ) -> Result<i64> {
+        self.transaction_repo
+            .count_with_filters(account_id, status, currency)
+            .await
+    }
+
+    /// Gets ledger entries for an account.
+    pub async fn get_account_ledger_entries(
+        &self,
+        account_id: Uuid,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<LedgerEntry>> {
+        self.ledger_repo.find_by_account(account_id, limit, offset).await
+    }
+
+    /// Counts ledger entries for an account for pagination.
+    pub async fn count_account_ledger_entries(&self, account_id: Uuid) -> Result<i64> {
+        self.ledger_repo.count_by_account(account_id).await
+    }
+
+    /// Processes any transaction type.
+    pub async fn process_transaction(&self, request: LedgerTransactionRequest) -> Result<LedgerTransactionResult> {
+        match request.transaction_type {
+            TransactionType::Payment => self.process_payment(request).await,
+            TransactionType::Transfer => self.process_transfer(request).await,
+            TransactionType::Fee => self.process_fee(request).await,
+            TransactionType::Refund => self.process_refund(request).await,
+            TransactionType::Chargeback => self.process_chargeback(request).await,
+        }
+    }
+
+    /// Reverses a transaction atomically within a single database transaction.
+    pub async fn reverse_transaction(
+        &self,
+        transaction_id: Uuid,
+        reason: &str,
+        idempotency_key: &str,
+    ) -> Result<LedgerTransactionResult> {
+        // Check idempotency first - if reversal already exists, return it
+        if let Some(existing) = self
+            .transaction_repo
+            .find_by_idempotency_key(idempotency_key)
+            .await?
+        {
+            return self.build_result_from_existing(existing).await;
+        }
+
+        // Start a database transaction for atomicity
+        let mut tx = self.pool.begin().await.map_err(AppError::Database)?;
+
+        // Fetch original transaction with row-level lock to prevent concurrent reversals
+        let original = sqlx::query_as::<_, TransactionRecord>(
+            r#"
+            SELECT id, external_id, type, status, source_account_id, destination_account_id, 
+                   amount, currency, fee_amount, net_amount, settlement_batch_id, 
+                   idempotency_key, metadata, created_at, settled_at
+            FROM transactions
+            WHERE id = $1
+            FOR UPDATE
+            "#,
+        )
+        .bind(transaction_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(AppError::Database)?
+        .ok_or_else(|| AppError::NotFound(format!("Transaction '{}' not found", transaction_id)))?;
+
+        // Validate transaction can be reversed
+        if !original.status.can_be_reversed() {
+            return Err(AppError::Validation(format!(
+                "Transaction with status {:?} cannot be reversed",
+                original.status
+            )));
+        }
+
+        if !original.transaction_type.is_reversible() {
+            return Err(AppError::Validation(format!(
+                "Transaction type {:?} cannot be reversed",
+                original.transaction_type
+            )));
+        }
+
+        let reversal_type = original.transaction_type.reversal_type().ok_or_else(|| {
+            AppError::Validation("No reversal type defined for this transaction".to_string())
+        })?;
+
+        // Fetch accounts
+        let source_account = sqlx::query_as::<_, Account>(
+            "SELECT id, external_id, name, type, currency, status, metadata, created_at, updated_at FROM accounts WHERE id = $1",
+        )
+        .bind(original.destination_account_id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(AppError::Database)?;
+
+        let dest_account = sqlx::query_as::<_, Account>(
+            "SELECT id, external_id, name, type, currency, status, metadata, created_at, updated_at FROM accounts WHERE id = $1",
+        )
+        .bind(original.source_account_id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(AppError::Database)?;
+
+        // Create reversal transaction record
+        let reversal_tx = TransactionRecord::new(
+            format!("REV-{}", original.external_id),
+            reversal_type,
+            source_account.id,
+            dest_account.id,
+            original.amount,
+            original.currency.clone(),
+            Decimal::ZERO,
+            idempotency_key.to_string(),
+        );
+
+        // Insert reversal transaction
+        let reversal_tx = sqlx::query_as::<_, TransactionRecord>(
+            r#"
+            INSERT INTO transactions (id, external_id, type, status, source_account_id, destination_account_id, 
+                                      amount, currency, fee_amount, net_amount, settlement_batch_id, 
+                                      idempotency_key, metadata, created_at, settled_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+            RETURNING id, external_id, type, status, source_account_id, destination_account_id, 
+                      amount, currency, fee_amount, net_amount, settlement_batch_id, 
+                      idempotency_key, metadata, created_at, settled_at
+            "#,
+        )
+        .bind(reversal_tx.id)
+        .bind(&reversal_tx.external_id)
+        .bind(&reversal_tx.transaction_type)
+        .bind(&reversal_tx.status)
+        .bind(reversal_tx.source_account_id)
+        .bind(reversal_tx.destination_account_id)
+        .bind(reversal_tx.amount)
+        .bind(&reversal_tx.currency)
+        .bind(reversal_tx.fee_amount)
+        .bind(reversal_tx.net_amount)
+        .bind(reversal_tx.settlement_batch_id)
+        .bind(&reversal_tx.idempotency_key)
+        .bind(serde_json::json!({
+            "original_transaction_id": original.id,
+            "reason": reason
+        }))
+        .bind(reversal_tx.created_at)
+        .bind(reversal_tx.settled_at)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(AppError::Database)?;
+
+        // Update balances - debit from source (original destination), credit to dest (original source)
+        let effective_date = Utc::now().date_naive();
+
+        // Update source balance (debit)
+        let updated_source = sqlx::query_as::<_, AccountBalance>(
+            r#"
+            UPDATE account_balances
+            SET available_balance = available_balance - $1, last_updated = NOW(), version = version + 1
+            WHERE account_id = $2 AND currency = $3
+            RETURNING account_id, currency, available_balance, pending_balance, reserved_balance, version, last_updated
+            "#,
+        )
+        .bind(original.amount)
+        .bind(source_account.id)
+        .bind(&original.currency)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(AppError::Database)?;
+
+        // Update destination balance (credit)
+        let updated_dest = sqlx::query_as::<_, AccountBalance>(
+            r#"
+            UPDATE account_balances
+            SET available_balance = available_balance + $1, last_updated = NOW(), version = version + 1
+            WHERE account_id = $2 AND currency = $3
+            RETURNING account_id, currency, available_balance, pending_balance, reserved_balance, version, last_updated
+            "#,
+        )
+        .bind(original.amount)
+        .bind(dest_account.id)
+        .bind(&original.currency)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(AppError::Database)?;
+
+        // Create ledger entries
+        let debit_entry = LedgerEntry::debit(
+            reversal_tx.id,
+            source_account.id,
+            original.amount,
+            original.currency.clone(),
+            updated_source.available_balance,
+            effective_date,
+        );
+
+        let credit_entry = LedgerEntry::credit(
+            reversal_tx.id,
+            dest_account.id,
+            original.amount,
+            original.currency.clone(),
+            updated_dest.available_balance,
+            effective_date,
+        );
+
+        // Insert ledger entries
+        let debit_entry = sqlx::query_as::<_, LedgerEntry>(
+            r#"
+            INSERT INTO ledger_entries (id, transaction_id, account_id, entry_type, amount, currency, balance_after, effective_date, metadata, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            RETURNING id, transaction_id, account_id, entry_type, amount, currency, balance_after, effective_date, metadata, created_at
+            "#,
+        )
+        .bind(debit_entry.id)
+        .bind(debit_entry.transaction_id)
+        .bind(debit_entry.account_id)
+        .bind(&debit_entry.entry_type)
+        .bind(debit_entry.amount)
+        .bind(&debit_entry.currency)
+        .bind(debit_entry.balance_after)
+        .bind(debit_entry.effective_date)
+        .bind(&debit_entry.metadata)
+        .bind(debit_entry.created_at)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(AppError::Database)?;
+
+        let credit_entry = sqlx::query_as::<_, LedgerEntry>(
+            r#"
+            INSERT INTO ledger_entries (id, transaction_id, account_id, entry_type, amount, currency, balance_after, effective_date, metadata, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            RETURNING id, transaction_id, account_id, entry_type, amount, currency, balance_after, effective_date, metadata, created_at
+            "#,
+        )
+        .bind(credit_entry.id)
+        .bind(credit_entry.transaction_id)
+        .bind(credit_entry.account_id)
+        .bind(&credit_entry.entry_type)
+        .bind(credit_entry.amount)
+        .bind(&credit_entry.currency)
+        .bind(credit_entry.balance_after)
+        .bind(credit_entry.effective_date)
+        .bind(&credit_entry.metadata)
+        .bind(credit_entry.created_at)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(AppError::Database)?;
+
+        // Update reversal transaction status to settled
+        let reversal_tx = sqlx::query_as::<_, TransactionRecord>(
+            r#"
+            UPDATE transactions
+            SET status = 'SETTLED', settled_at = NOW()
+            WHERE id = $1
+            RETURNING id, external_id, type, status, source_account_id, destination_account_id, 
+                      amount, currency, fee_amount, net_amount, settlement_batch_id, 
+                      idempotency_key, metadata, created_at, settled_at
+            "#,
+        )
+        .bind(reversal_tx.id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(AppError::Database)?;
+
+        // Mark original transaction as reversed
+        sqlx::query(
+            "UPDATE transactions SET status = 'REVERSED' WHERE id = $1"
+        )
+        .bind(transaction_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(AppError::Database)?;
+
+        // Commit the entire transaction
+        tx.commit().await.map_err(AppError::Database)?;
+
+        Ok(LedgerTransactionResult {
+            transaction: reversal_tx,
+            entries: vec![debit_entry, credit_entry],
+            source_balance: updated_source,
+            destination_balance: updated_dest,
+        })
+    }
+
     /// Verifies that a transaction's ledger entries are balanced.
     pub async fn verify_transaction_balance(&self, transaction_id: Uuid) -> Result<bool> {
         self.ledger_repo.verify_transaction_balance(transaction_id).await

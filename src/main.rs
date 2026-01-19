@@ -1,7 +1,9 @@
+use settlement_engine::api::{create_router, AppState};
 use settlement_engine::config::Settings;
-use settlement_engine::error::AppError;
 use sqlx::postgres::PgPoolOptions;
+use std::sync::Arc;
 use std::time::Duration;
+use tokio::net::TcpListener;
 use tracing::info;
 
 #[tokio::main]
@@ -30,24 +32,54 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Connect to Redis
     info!("Connecting to Redis at {}...", settings.redis.url);
-    let client = redis::Client::open(settings.redis.url)?;
-    let mut con = client.get_multiplexed_async_connection().await?;
+    let redis_client = redis::Client::open(settings.redis.url.clone())?;
+    let mut con = redis_client.get_multiplexed_async_connection().await?;
     let _: () = redis::cmd("PING").query_async(&mut con).await?;
     info!("Redis connection established");
 
-    // Connect to Kafka (Basic check)
+    // Connect to Kafka (with timeout, preserve client)
     info!("Checking Kafka connection...");
     use rskafka::client::ClientBuilder;
 
-    let connection = vec![settings.kafka.brokers];
-    let _client = ClientBuilder::new(connection)
-        .build()
-        .await
-        .map_err(AppError::Kafka)?;
+    let connection = vec![settings.kafka.brokers.clone()];
+    let kafka_client = match tokio::time::timeout(
+        Duration::from_secs(3),
+        ClientBuilder::new(connection).build()
+    )
+    .await
+    {
+        Ok(Ok(client)) => {
+            info!("Kafka client created successfully");
+            Some(Arc::new(client))
+        }
+        Ok(Err(e)) => {
+            tracing::warn!("Kafka connection failed: {}. Continuing without Kafka.", e);
+            None
+        }
+        Err(_) => {
+            tracing::warn!("Kafka connection timed out. Continuing without Kafka.");
+            None
+        }
+    };
 
-    info!("Kafka client created successfully");
+    if kafka_client.is_none() {
+        info!("Kafka not available, continuing without event streaming");
+    }
 
-    info!("System startup verification complete: All services healthy.");
+    info!("System startup verification complete.");
+
+    // Create application state
+    let state = AppState::new(pool, redis_client, kafka_client);
+
+    // Create API router
+    let app = create_router(state);
+
+    // Start HTTP server
+    let addr = format!("0.0.0.0:{}", settings.application.port);
+    info!("Starting HTTP server on {}", addr);
     
+    let listener = TcpListener::bind(&addr).await?;
+    axum::serve(listener, app).await?;
+
     Ok(())
 }

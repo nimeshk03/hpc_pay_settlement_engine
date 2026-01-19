@@ -500,8 +500,26 @@ impl BatchService {
     }
 
     /// Gets a batch by ID.
-    pub async fn get_batch(&self, batch_id: Uuid) -> Result<Option<SettlementBatch>> {
-        self.batch_repo.find_by_id(batch_id).await
+    pub async fn get_batch(&self, batch_id: Uuid) -> Result<SettlementBatch> {
+        self.batch_repo
+            .find_by_id(batch_id)
+            .await?
+            .ok_or_else(|| AppError::NotFound(format!("Batch '{}' not found", batch_id)))
+    }
+
+    /// Processes a batch (alias for trigger_batch_processing for API).
+    pub async fn process_batch(&self, batch_id: Uuid) -> Result<BatchProcessingResult> {
+        self.trigger_batch_processing(batch_id).await
+    }
+
+    /// Gets netting positions for a batch.
+    pub async fn get_batch_positions(&self, batch_id: Uuid) -> Result<Vec<crate::models::NettingPosition>> {
+        use crate::repositories::NettingRepository;
+        
+        let _batch = self.get_batch(batch_id).await?;
+        
+        let netting_repo = NettingRepository::new(self.pool.clone());
+        netting_repo.find_by_batch(batch_id).await
     }
 
     /// Lists batches with optional filters.

@@ -190,6 +190,56 @@ Distributed event streaming for settlement events using Apache Kafka:
   - `settlement.positions`: Netting position events
   - `settlement.completed`: Settlement completion events
 
+## HTTP API
+
+The settlement engine exposes a RESTful HTTP API built with Axum.
+
+### Health Endpoints
+- `GET /health` - Full health check with service status
+- `GET /ready` - Readiness probe for Kubernetes
+- `GET /live` - Liveness probe for Kubernetes
+
+### Account Endpoints
+- `POST /accounts` - Create a new account
+- `GET /accounts/{id}` - Get account details
+- `GET /accounts/{id}/balance` - Get account balance
+- `GET /accounts/{id}/ledger` - Get ledger entries for account
+
+### Transaction Endpoints
+- `POST /transactions` - Create a new transaction
+- `GET /transactions` - List transactions with filters
+- `GET /transactions/{id}` - Get transaction details
+- `POST /transactions/{id}/reverse` - Reverse a transaction
+
+### Batch Endpoints
+- `GET /batches` - List settlement batches
+- `GET /batches/{id}` - Get batch details
+- `POST /batches/{id}/process` - Trigger batch processing
+- `GET /batches/{id}/positions` - Get netting positions for batch
+
+### API Response Format
+All responses follow a consistent format:
+```json
+{
+  "success": true,
+  "data": { ... },
+  "error": null
+}
+```
+
+Error responses include:
+```json
+{
+  "success": false,
+  "data": null,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Request validation failed",
+    "details": [...]
+  }
+}
+```
+
 ## Development
 
 - **Linting**: `cargo clippy`
