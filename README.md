@@ -273,6 +273,43 @@ The logging module includes utilities for masking sensitive data:
 - `mask_uuid()` - Masks UUIDs showing only first/last 4 chars
 - `mask_amount()` - Shows only magnitude (K+, M+) for amounts
 
+## Performance Optimization
+
+### Database Connection Pooling
+Configurable connection pool settings in `config/default.toml`:
+- `pool_size` - Maximum connections (default: based on workload)
+- `min_connections` - Minimum idle connections (default: 5)
+- `acquire_timeout_secs` - Connection acquisition timeout (default: 5s)
+- `idle_timeout_secs` - Idle connection timeout (default: 300s)
+- `max_lifetime_secs` - Maximum connection lifetime (default: 1800s)
+
+### Redis Caching
+Balance lookups are cached in Redis for sub-millisecond response times:
+- **Cache TTL**: Configurable via `cache.balance_ttl_secs` (default: 60s)
+- **Cache Invalidation**: Automatic on balance mutations (credit, debit, reserve)
+- **Cache Stats**: Hit rate, miss rate, invalidation count available via `CacheStats`
+
+Configuration in `config/default.toml`:
+```toml
+[cache]
+enabled = true
+balance_ttl_secs = 60
+key_prefix = "settlement"
+```
+
+### Benchmarks
+Run performance benchmarks with Criterion:
+```bash
+cargo bench
+```
+
+Benchmark groups:
+- **balance**: Balance creation and calculation operations
+- **transaction**: Transaction record creation
+- **cache_stats**: Cache statistics operations
+- **decimal**: Decimal arithmetic performance
+- **uuid**: UUID generation performance
+
 ## Development
 
 - **Linting**: `cargo clippy`

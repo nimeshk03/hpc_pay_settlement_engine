@@ -35,3 +35,8 @@ http = "1.0"
 mockall = "0.12"
 rust_decimal_macros = "1.34"
 tokio-test = "0.4"
+criterion = { version = "0.5", features = ["async_tokio"] }
+
+[[bench]]
+name = "performance"
+harness = false
