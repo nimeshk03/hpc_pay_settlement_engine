@@ -166,6 +166,30 @@ High-performance netting engine for reducing settlement volumes:
 - **Position Persistence**: Store and retrieve netting positions from database
 - **Metrics Tracking**: Track batches processed, transactions netted, average efficiency
 
+## Event System (Kafka Integration)
+
+Distributed event streaming for settlement events using Apache Kafka:
+
+- **EventProducer**: Kafka producer with retry logic and batch support
+  - Configurable compression (None, Gzip, Snappy, LZ4, Zstd)
+  - Automatic retry with exponential backoff
+  - Batch message production for high throughput
+- **EventConsumer**: Kafka consumer with offset management
+  - MessageHandler trait for custom message processing
+  - Dead letter queue (DLQ) for failed messages
+  - Manual offset tracking for exactly-once semantics
+- **Event Types**: Strongly-typed event payloads
+  - `TransactionEvent`: Transaction lifecycle events
+  - `BatchEvent`: Batch creation and completion events
+  - `PositionEvent`: Netting position calculations
+  - `NettingEvent`: Netting completion summaries
+  - `SettlementEvent`: Final settlement confirmations
+- **Topics**: Predefined topic structure
+  - `settlement.transactions`: Transaction events
+  - `settlement.batches`: Batch lifecycle events
+  - `settlement.positions`: Netting position events
+  - `settlement.completed`: Settlement completion events
+
 ## Development
 
 - **Linting**: `cargo clippy`

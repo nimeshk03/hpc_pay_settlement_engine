@@ -11,7 +11,9 @@ use settlement_engine::services::{
 use uuid::Uuid;
 
 fn unique_currency() -> String {
-    format!("X{}", &Uuid::new_v4().to_string().replace("-", "")[..2]).to_uppercase()
+    // Use more entropy - take 2 chars from different parts of UUID
+    let uuid = Uuid::new_v4().to_string().replace("-", "");
+    format!("{}{}", &uuid[0..1], &uuid[16..18]).to_uppercase()
 }
 
 #[tokio::test]
