@@ -1,5 +1,8 @@
 use settlement_engine::api::{create_router, AppState};
 use settlement_engine::config::Settings;
+use settlement_engine::observability::{
+    init_logging, init_metrics, LogConfig, LogFormat, HealthChecker,
+};
 use sqlx::postgres::PgPoolOptions;
 use std::sync::Arc;
 use std::time::Duration;
@@ -8,12 +11,24 @@ use tracing::info;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Initialize logging
-    tracing_subscriber::fmt::init();
-
-    // Load configuration
+    // Load configuration first (needed for log level)
     let settings = Settings::new()?;
-    info!("Configuration loaded");
+
+    // Initialize structured logging
+    let log_config = LogConfig {
+        level: settings.application.log_level.clone(),
+        format: LogFormat::from(
+            std::env::var("LOG_FORMAT").unwrap_or_else(|_| "pretty".to_string()).as_str()
+        ),
+        include_target: true,
+        include_file: false,
+        include_line: false,
+    };
+    init_logging(&log_config);
+
+    // Initialize Prometheus metrics
+    let metrics_handle = init_metrics();
+    info!("Configuration loaded, metrics initialized");
 
     // Connect to PostgreSQL
     info!("Connecting to database at {}...", settings.database.url);
@@ -68,8 +83,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("System startup verification complete.");
 
-    // Create application state
-    let state = AppState::new(pool, redis_client, kafka_client);
+    // Create health checker
+    let health_checker = Arc::new(HealthChecker::new(
+        pool.clone(),
+        redis_client.clone(),
+        kafka_client.clone(),
+    ));
+
+    // Create application state with metrics handle and health checker
+    let state = AppState::new(pool, redis_client, kafka_client)
+        .with_metrics(metrics_handle)
+        .with_health_checker(health_checker);
 
     // Create API router
     let app = create_router(state);

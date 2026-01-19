@@ -7,6 +7,7 @@ pub mod events;
 pub mod idempotency;
 pub mod models;
 pub mod netting;
+pub mod observability;
 pub mod persistence;
 pub mod repositories;
 pub mod services;

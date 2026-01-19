@@ -67,6 +67,32 @@ pub async fn liveness_check() -> StatusCode {
     StatusCode::OK
 }
 
+/// Detailed health check endpoint with dependency information.
+pub async fn detailed_health_check(
+    State(state): State<AppState>,
+) -> Json<ApiResponse<crate::observability::AggregatedHealth>> {
+    if let Some(health_checker) = &state.health_checker {
+        let health = health_checker.check_all().await;
+        Json(ApiResponse::success(health))
+    } else {
+        let health = crate::observability::AggregatedHealth::new(
+            env!("CARGO_PKG_VERSION").to_string(),
+            0,
+            vec![],
+        );
+        Json(ApiResponse::success(health))
+    }
+}
+
+/// Prometheus metrics endpoint.
+pub async fn metrics_endpoint(State(state): State<AppState>) -> String {
+    if let Some(handle) = &state.metrics_handle {
+        handle.render()
+    } else {
+        String::new()
+    }
+}
+
 // ============================================================================
 // Account Handlers
 // ============================================================================

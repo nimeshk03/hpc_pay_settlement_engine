@@ -195,9 +195,11 @@ Distributed event streaming for settlement events using Apache Kafka:
 The settlement engine exposes a RESTful HTTP API built with Axum.
 
 ### Health Endpoints
-- `GET /health` - Full health check with service status
+- `GET /health` - Basic health check with service status
+- `GET /health/detailed` - Detailed health check with dependency latencies
 - `GET /ready` - Readiness probe for Kubernetes
 - `GET /live` - Liveness probe for Kubernetes
+- `GET /metrics` - Prometheus metrics endpoint
 
 ### Account Endpoints
 - `POST /accounts` - Create a new account
@@ -239,6 +241,37 @@ Error responses include:
   }
 }
 ```
+
+## Observability
+
+### Structured Logging
+The application uses `tracing` for structured logging with configurable output formats:
+- **Pretty**: Human-readable format for development
+- **JSON**: Machine-parseable format for production
+- **Compact**: Minimal format for high-throughput scenarios
+
+Set the log format via environment variable: `LOG_FORMAT=json`
+
+### Prometheus Metrics
+Available at `GET /metrics`, includes:
+- **Transaction metrics**: `settlement_transactions_total`, `settlement_transactions_settled_total`
+- **Latency histograms**: `settlement_ledger_write_duration_ms`, `settlement_balance_query_duration_ms`
+- **Batch metrics**: `settlement_batches_processed_total`, `settlement_batch_processing_duration_ms`
+- **Netting metrics**: `settlement_netting_efficiency_ratio`, `settlement_netting_calculation_duration_ms`
+- **HTTP metrics**: `http_requests_total`, `http_request_duration_ms`
+- **Database metrics**: `db_queries_total`, `db_query_duration_ms`
+
+### Health Checks
+- `/health` - Basic health status
+- `/health/detailed` - Detailed health with per-dependency latency and status
+- `/ready` - Kubernetes readiness probe (checks DB connectivity)
+- `/live` - Kubernetes liveness probe (always returns 200)
+
+### Sensitive Data Masking
+The logging module includes utilities for masking sensitive data:
+- `mask_sensitive()` - Masks middle characters of strings
+- `mask_uuid()` - Masks UUIDs showing only first/last 4 chars
+- `mask_amount()` - Shows only magnitude (K+, M+) for amounts
 
 ## Development
 
