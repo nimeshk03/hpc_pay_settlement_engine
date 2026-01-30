@@ -15,17 +15,35 @@ data:
   KAFKA_BROKERS: "kafka:9092"
 
 ---
+# NOTE: This Secret manifest contains placeholders only.
+# DO NOT commit real credentials to version control.
+# 
+# For production deployment:
+# 1. Use a secret management solution (e.g., sealed-secrets, external-secrets-operator, Vault)
+# 2. Or create secrets via kubectl:
+#    kubectl create secret generic settlement-secrets \
+#      --from-literal=POSTGRES_PASSWORD=<your-password> \
+#      --from-literal=REDIS_PASSWORD=<your-password> \
+#      --from-literal=DATABASE_URL=postgresql://postgres:<password>@postgres:5432/settlement_engine \
+#      --from-literal=REDIS_URL=redis://:<password>@redis:6379 \
+#      -n settlement-engine
+#
 apiVersion: v1
 kind: Secret
 metadata:
   name: settlement-secrets
   namespace: settlement-engine
+  annotations:
+    # Example for sealed-secrets:
+    # sealedsecrets.bitnami.com/managed: "true"
+    # Example for external-secrets:
+    # external-secrets.io/backend: "vault"
 type: Opaque
 stringData:
-  POSTGRES_PASSWORD: "changeme"
-  REDIS_PASSWORD: "changeme"
-  DATABASE_URL: "postgresql://postgres:changeme@postgres:5432/settlement_engine"
-  REDIS_URL: "redis://:changeme@redis:6379"
+  POSTGRES_PASSWORD: "<REPLACE_WITH_REAL_PASSWORD>"
+  REDIS_PASSWORD: "<REPLACE_WITH_REAL_PASSWORD>"
+  DATABASE_URL: "postgresql://postgres:<REPLACE_WITH_POSTGRES_PASSWORD>@postgres:5432/settlement_engine"
+  REDIS_URL: "redis://:<REPLACE_WITH_REDIS_PASSWORD>@redis:6379"
 
 ---
 apiVersion: apps/v1
@@ -34,7 +52,8 @@ metadata:
   name: settlement-app
   namespace: settlement-engine
 spec:
-  replicas: 3
+  # Replicas managed by HPA - do not set manually
+  # replicas: 2
   selector:
     matchLabels:
       app: settlement-app
@@ -45,8 +64,10 @@ spec:
     spec:
       containers:
       - name: settlement-engine
-        image: settlement-engine:latest
-        imagePullPolicy: Always
+        # IMPORTANT: Use immutable tags or digests for production
+        # Example: settlement-engine:1.0.0 or settlement-engine@sha256:abc123...
+        image: settlement-engine:1.0.0
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 3000
           name: http
@@ -136,7 +157,16 @@ metadata:
   namespace: settlement-engine
   annotations:
     nginx.ingress.kubernetes.io/rewrite-target: /
+    # Enable TLS with cert-manager (uncomment and configure):
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    # cert-manager.io/acme-challenge-type: "http01"
 spec:
+  tls:
+  - hosts:
+    - settlement.example.com
+    secretName: settlement-example-tls
+    # This secret should contain tls.crt and tls.key
+    # Create manually or use cert-manager to provision automatically
   rules:
   - host: settlement.example.com
     http:

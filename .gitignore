@@ -15,9 +15,9 @@ secrets/*.txt
 
 # Backups
 backups/
-*.sql
-*.sql.gz
+backups/*.sql
+backups/*.sql.gz
 
 # Logs
 logs/
-*.log
+logs/*.log

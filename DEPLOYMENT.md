@@ -57,7 +57,13 @@ make down
 
 1. **Create secrets**:
    ```bash
-   echo "your_secure_password" > secrets/postgres_password.txt
+   # Retrieve password from your password manager or vault
+   # Example using 1Password CLI:
+   # op read "op://vault/postgres/password" > secrets/postgres_password.txt
+   
+   # Or read interactively (password won't appear in shell history):
+   read -s -p "Enter PostgreSQL password: " PGPASS && echo "$PGPASS" > secrets/postgres_password.txt && unset PGPASS
+   
    chmod 600 secrets/postgres_password.txt
    ```
 
@@ -135,10 +141,14 @@ gunzip -c backups/backup_file.sql.gz | \
 
 ### Automated Backups
 
-Production deployment includes automated daily backups at 2 AM:
-- Retention: 7 days
-- Location: `./backups/`
+**Docker Compose**: The production stack includes a `backup` service that runs `/backup.sh` via cron at 2 AM daily. The service mounts `./backups` and requires `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` environment variables.
+
+**Kubernetes**: Deploy a CronJob resource that runs the backup script. Set `BACKUP_SCHEDULE` (default: `0 2 * * *` for 2 AM daily) and configure the same environment variables.
+
+- Retention: 7 days (configurable via `RETENTION_DAYS`)
+- Location: `./backups/` (local volume)
 - Format: `settlement_engine_YYYYMMDD_HHMMSS.sql.gz`
+- **IMPORTANT**: Configure remote/offsite backup transfer (see Backup Strategy below)
 
 ## Monitoring
 
@@ -244,10 +254,25 @@ HPA is configured to scale between 2-10 replicas based on:
 
 ### Backup Strategy
 
+**MANDATORY for Production:**
+
 - **Frequency**: Daily automated backups
-- **Retention**: 7 days for automated, manual backups indefinite
-- **Storage**: Local volume (configure remote storage for production)
-- **Testing**: Restore backups monthly to verify integrity
+- **Retention**: 7 days local, 90 days remote with lifecycle policies matching RTO/RPO
+- **Storage**: 
+  - **Primary**: Encrypted S3-compatible object storage with versioning and object lock enabled
+  - **Secondary**: Cross-region replication to geographically separate location
+  - **Recommended**: AWS S3, Google Cloud Storage, Azure Blob Storage, or MinIO with encryption
+- **Encryption**: 
+  - AES-256 encryption at rest (server-side encryption)
+  - TLS 1.3 for encryption in transit
+  - Encrypted backup files before upload
+- **Transfer**: Automated sync from local `./backups/` to remote storage after each backup
+- **Immutability**: Enable object lock or WORM (Write Once Read Many) on remote storage
+- **Testing**: 
+  - Monthly restore tests to verify RTO (< 15 minutes)
+  - Quarterly disaster recovery drills
+  - Automated integrity checks (checksums, test restores)
+- **Monitoring**: Alert on backup failures, missing backups, or integrity check failures
 
 ### Recovery Procedure
 

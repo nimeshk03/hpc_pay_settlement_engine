@@ -51,7 +51,8 @@ prod-down:
 
 backup:
 	@echo "Creating database backup..."
-	@docker-compose exec postgres pg_dump -U postgres settlement_engine | gzip > backups/manual_backup_$$(date +%Y%m%d_%H%M%S).sql.gz
+	@mkdir -p backups
+	@docker-compose exec postgres pg_dump -U $${POSTGRES_USER:-postgres} $${POSTGRES_DB:-settlement_engine} | gzip > backups/manual_backup_$$(date +%Y%m%d_%H%M%S).sql.gz
 	@echo "Backup created in backups/"
 
 restore:

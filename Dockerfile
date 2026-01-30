@@ -53,13 +53,14 @@ EXPOSE 3000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD ["/usr/local/bin/settlement_engine", "--health-check"] || exit 1
+    CMD ["/usr/local/bin/settlement_engine", "--health-check"]
 
 # Set environment variables
 ENV RUST_LOG=info
-ENV DATABASE_URL=postgresql://postgres:postgres@postgres:5432/settlement_engine
-ENV REDIS_URL=redis://redis:6379
-ENV KAFKA_BROKERS=kafka:9092
+# DATABASE_URL, REDIS_URL, and KAFKA_BROKERS must be provided at runtime
+# Example: DATABASE_URL=postgresql://<user>:<pass>@<host>:<port>/<db>
+# Example: REDIS_URL=redis://:<pass>@<host>:<port>
+# Example: KAFKA_BROKERS=kafka:29092
 
 # Run the application
 CMD ["/usr/local/bin/settlement_engine"]

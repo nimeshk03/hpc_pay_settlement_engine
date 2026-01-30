@@ -4,6 +4,22 @@
 
 set -e
 
+# Validate required environment variables
+if [ -z "${POSTGRES_USER}" ]; then
+    echo "ERROR: POSTGRES_USER environment variable is not set" >&2
+    exit 1
+fi
+
+if [ -z "${PGHOST}" ]; then
+    echo "ERROR: PGHOST environment variable is not set" >&2
+    exit 1
+fi
+
+if [ -z "${POSTGRES_DB}" ]; then
+    echo "ERROR: POSTGRES_DB environment variable is not set" >&2
+    exit 1
+fi
+
 BACKUP_DIR="/backups"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 BACKUP_FILE="${BACKUP_DIR}/settlement_engine_${TIMESTAMP}.sql.gz"
@@ -14,10 +30,21 @@ echo "Starting backup at $(date)"
 # Create backup directory if it doesn't exist
 mkdir -p "${BACKUP_DIR}"
 
-# Perform backup
-pg_dump -U "${POSTGRES_USER}" -h "${PGHOST}" "${POSTGRES_DB}" | gzip > "${BACKUP_FILE}"
+# Perform backup with proper error handling
+TEMP_FILE="${BACKUP_DIR}/temp_backup_${TIMESTAMP}.sql"
 
-if [ $? -eq 0 ]; then
+pg_dump -U "${POSTGRES_USER}" -h "${PGHOST}" "${POSTGRES_DB}" > "${TEMP_FILE}"
+PG_DUMP_EXIT=$?
+
+if [ ${PG_DUMP_EXIT} -eq 0 ]; then
+    gzip < "${TEMP_FILE}" > "${BACKUP_FILE}"
+    GZIP_EXIT=$?
+    rm -f "${TEMP_FILE}"
+    
+    if [ ${GZIP_EXIT} -ne 0 ]; then
+        echo "Gzip compression failed!"
+        exit 1
+    fi
     echo "Backup completed successfully: ${BACKUP_FILE}"
     
     # Calculate backup size
