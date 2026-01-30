@@ -7,3 +7,17 @@ implementation_plan.md
 # Added by cargo
 
 /target
+
+# Environment and secrets
+.env
+secrets/*.txt
+!secrets/.gitkeep
+
+# Backups
+backups/
+*.sql
+*.sql.gz
+
+# Logs
+logs/
+*.log

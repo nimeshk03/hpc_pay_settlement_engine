@@ -310,12 +310,69 @@ Benchmark groups:
 - **decimal**: Decimal arithmetic performance
 - **uuid**: UUID generation performance
 
+## Docker Deployment
+
+### Quick Start (Development)
+
+```bash
+# Start all services
+make up
+
+# View logs
+make logs
+
+# Stop services
+make down
+```
+
+### Using Docker Compose Directly
+
+```bash
+# Start development stack
+docker-compose up -d
+
+# Check service health
+docker-compose ps
+
+# View logs
+docker-compose logs -f app
+
+# Stop services
+docker-compose down
+```
+
+### Production Deployment
+
+```bash
+# Configure secrets
+echo "your_secure_password" > secrets/postgres_password.txt
+
+# Start production stack
+docker-compose -f docker-compose.prod.yml up -d
+```
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed deployment instructions.
+
+### Services
+
+The Docker Compose stack includes:
+- **PostgreSQL 15**: Primary database with automated backups
+- **Redis 7**: Caching layer with persistence
+- **Kafka + Zookeeper**: Event streaming
+- **Settlement Engine**: Application service (auto-scaled in production)
+
+### Resource Requirements
+
+- **Development**: 4GB RAM, 10GB disk
+- **Production**: 8GB RAM, 50GB disk (with backups)
+
 ## Development
 
 - **Linting**: `cargo clippy`
 - **Formatting**: `cargo fmt`
 - **Testing**: `cargo test`
 - **Check**: `cargo check`
+- **Benchmarks**: `cargo bench` or `make bench`
 
 ## Database Migrations
 

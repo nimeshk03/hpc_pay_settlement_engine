@@ -11,6 +11,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -19,10 +20,12 @@ services:
 
   redis:
     image: redis:7-alpine
+    command: redis-server /usr/local/etc/redis/redis.conf
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
+      - ./docker/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -55,7 +58,45 @@ services:
       interval: 10s
       timeout: 10s
       retries: 5
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      RUST_LOG: info
+      APP__DATABASE__URL: postgresql://postgres:postgres@postgres:5432/settlement_engine
+      APP__DATABASE__POOL_SIZE: 10
+      APP__REDIS__URL: redis://redis:6379
+      APP__KAFKA__BROKERS: kafka:29092
+      APP__KAFKA__TOPIC_PREFIX: settlement
+      APP__APPLICATION__PORT: 3000
+      APP__APPLICATION__LOG_LEVEL: info
+      LOG_FORMAT: json
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    volumes:
+      - ./config:/app/config:ro
+      - app_logs:/app/logs
 
 volumes:
   postgres_data:
   redis_data:
+  kafka_data:
+  app_logs:
